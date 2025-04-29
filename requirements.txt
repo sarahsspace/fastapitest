@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+numpy
+tensorflow
+python-multipart
+scikit-learn
+nest_asyncio
