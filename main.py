@@ -1,6 +1,7 @@
 
 # Import necessary libraries
 import nest_asyncio
+import os
 import uvicorn
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse
@@ -59,4 +60,5 @@ async def compare_images(file1: UploadFile = File(...), file2: UploadFile = File
 #public_url = ngrok.connect(8000)
 #print("Public URL:", public_url)
 
-uvicorn.run(app, host="0.0.0.0", port=8000)
+port = int(os.environ.get("PORT", 8000))
+uvicorn.run(app, host="0.0.0.0", port=port)
