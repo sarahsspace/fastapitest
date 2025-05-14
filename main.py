@@ -11,17 +11,13 @@ import nest_asyncio
 import uvicorn
 from typing import List
 
-# Allow async and FastAPI to run inside the same thread (required for notebooks/render)
 nest_asyncio.apply()
 
-# Initialize FastAPI app
 app = FastAPI()
 
-# Load the pre-trained EfficientNetV2B0 model for feature extraction
 model = EfficientNetV2B0(weights="imagenet", include_top=False, pooling="avg")
 
 def extract_features(img_bytes):
-    """Convert uploaded image to preprocessed feature vector."""
     try:
         img = image.load_img(io.BytesIO(img_bytes), target_size=(224, 224))
         img_array = image.img_to_array(img)
@@ -36,14 +32,18 @@ def extract_features(img_bytes):
 @app.post("/recommend")
 async def recommend_outfit(
     pinterest_images: List[UploadFile] = File(...),
+    pinterest_occasions: List[str] = Form(...),
     wardrobe_images: List[UploadFile] = File(...),
     occasion: str = Form(...)
 ):
-    """Main endpoint to compare Pinterest and wardrobe images and return outfit recommendations."""
     threshold = 0.3
     matched_outfits = []
 
-    for p_img in pinterest_images:
+    for i, p_img in enumerate(pinterest_images):
+        p_img_occasion = pinterest_occasions[i]
+        if occasion.lower() != p_img_occasion.lower():
+            continue
+
         p_bytes = await p_img.read()
         p_features = extract_features(p_bytes)
         if p_features is None:
@@ -63,10 +63,11 @@ async def recommend_outfit(
                     "similarity": float(similarity)
                 })
 
-        matched_outfits.append({
-            "pinterest_image": p_img.filename,
-            "recommended_wardrobe": sorted(matches, key=lambda x: x["similarity"], reverse=True)[:3]
-        })
+        if matches:
+            matched_outfits.append({
+                "pinterest_image": p_img.filename,
+                "recommended_wardrobe": sorted(matches, key=lambda x: x["similarity"], reverse=True)[:3]
+            })
 
     return JSONResponse(content={
         "occasion": occasion,
