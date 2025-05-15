@@ -9,7 +9,7 @@ import io
 import os
 import nest_asyncio
 import uvicorn
-from typing import List
+from typing import List, Annotated
 
 nest_asyncio.apply()
 app = FastAPI()
@@ -30,27 +30,27 @@ def extract_features(img_bytes):
 
 @app.post("/recommend")
 async def recommend_outfit(
+    occasion: Annotated[str, Form()],
+    pinterest_occasions: Annotated[List[str], Form()],
     pinterest_images: List[UploadFile] = File(...),
-    pinterest_occasions: List[str] = Form(...),
-    wardrobe_images: List[UploadFile] = File(...),
-    occasion: str = Form(...)
+    wardrobe_images: List[UploadFile] = File(...)
 ):
     threshold = 0.3
     matched_outfits = []
 
-    print(f"Request occasion: {occasion}")
+    print(f"Requested occasion: {occasion}")
     print(f"Received Pinterest occasion tags: {pinterest_occasions}")
 
     for i, p_img in enumerate(pinterest_images):
         if i >= len(pinterest_occasions):
-            print(f"Skipping {p_img.filename} — no occasion provided.")
+            print(f"Skipping {p_img.filename} — no matching occasion provided")
             continue
 
         p_img_occasion = pinterest_occasions[i]
-        print(f"{p_img.filename} tagged as: {p_img_occasion}")
+        print(f"{p_img.filename} is tagged as {p_img_occasion}")
 
         if occasion.strip().lower() != p_img_occasion.strip().lower():
-            print(f"Skipping {p_img.filename} — doesn't match requested occasion.")
+            print(f"Skipping {p_img.filename} — doesn't match requested occasion")
             continue
 
         p_bytes = await p_img.read()
@@ -85,7 +85,6 @@ async def recommend_outfit(
         "matched_outfits": matched_outfits
     })
 
-# Render will run this section (and locally if needed)
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
