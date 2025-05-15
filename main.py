@@ -12,7 +12,6 @@ import uvicorn
 from typing import List
 
 nest_asyncio.apply()
-
 app = FastAPI()
 
 model = EfficientNetV2B0(weights="imagenet", include_top=False, pooling="avg")
@@ -39,12 +38,19 @@ async def recommend_outfit(
     threshold = 0.3
     matched_outfits = []
 
+    print(f"Request occasion: {occasion}")
+    print(f"Received Pinterest occasion tags: {pinterest_occasions}")
+
     for i, p_img in enumerate(pinterest_images):
         if i >= len(pinterest_occasions):
-         continue  # Skip image if no occasion provided
+            print(f"Skipping {p_img.filename} — no occasion provided.")
+            continue
 
         p_img_occasion = pinterest_occasions[i]
-        if occasion.lower() != p_img_occasion.lower():
+        print(f"{p_img.filename} tagged as: {p_img_occasion}")
+
+        if occasion.strip().lower() != p_img_occasion.strip().lower():
+            print(f"Skipping {p_img.filename} — doesn't match requested occasion.")
             continue
 
         p_bytes = await p_img.read()
@@ -60,6 +66,8 @@ async def recommend_outfit(
                 continue
 
             similarity = cosine_similarity(p_features, w_features)[0][0]
+            print(f"{p_img.filename} vs {w_img.filename} — similarity: {similarity:.2f}")
+
             if similarity >= threshold:
                 matches.append({
                     "wardrobe_image": w_img.filename,
