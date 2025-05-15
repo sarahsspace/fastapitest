@@ -40,6 +40,9 @@ async def recommend_outfit(
     matched_outfits = []
 
     for i, p_img in enumerate(pinterest_images):
+        if i >= len(pinterest_occasions):
+         continue  # Skip image if no occasion provided
+
         p_img_occasion = pinterest_occasions[i]
         if occasion.lower() != p_img_occasion.lower():
             continue
