@@ -57,6 +57,12 @@ def classify_image(img_bytes):
         print(f"Error classifying image: {e}")
         return "unknown"
 
+@app.post("/classify_item")
+async def classify_item(image: UploadFile = File(...)):
+    img_bytes = await image.read()
+    label = classify_image(img_bytes)
+    return JSONResponse(content={"category": label})
+
 @app.post("/recommend")
 async def recommend_outfit(
     occasion: Annotated[str, Form()],

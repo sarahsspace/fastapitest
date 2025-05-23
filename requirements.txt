@@ -1,7 +1,7 @@
 fastapi
 uvicorn
 numpy
-tensorflow
+tensorflow-cpu
 python-multipart
 scikit-learn
 nest_asyncio
