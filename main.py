@@ -4,6 +4,9 @@ from tensorflow.keras.applications import EfficientNetV2B0
 from tensorflow.keras.applications.efficientnet_v2 import preprocess_input
 from tensorflow.keras.preprocessing import image
 from sklearn.metrics.pairwise import cosine_similarity
+from transformers import AutoModelForImageClassification, AutoFeatureExtractor
+from PIL import Image
+import torch
 import numpy as np
 import io
 import os
@@ -14,7 +17,12 @@ from typing import List, Annotated
 nest_asyncio.apply()
 app = FastAPI()
 
+# Load EfficientNet for feature extraction
 model = EfficientNetV2B0(weights="imagenet", include_top=False, pooling="avg")
+
+# Load pretrained Hugging Face transformer model for fashion classification
+hf_model = AutoModelForImageClassification.from_pretrained("nateraw/vit-fashion_mnist")
+hf_extractor = AutoFeatureExtractor.from_pretrained("nateraw/vit-fashion_mnist")
 
 def extract_features(img_bytes):
     try:
@@ -27,6 +35,20 @@ def extract_features(img_bytes):
     except Exception as e:
         print(f"Error extracting features: {e}")
         return None
+
+def classify_image(img_bytes):
+    try:
+        pil_img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        inputs = hf_extractor(images=pil_img, return_tensors="pt")
+        with torch.no_grad():
+            outputs = hf_model(**inputs)
+        logits = outputs.logits
+        predicted_idx = logits.argmax(-1).item()
+        label = hf_model.config.id2label[predicted_idx]
+        return label
+    except Exception as e:
+        print(f"Error classifying image: {e}")
+        return "unknown"
 
 @app.post("/recommend")
 async def recommend_outfit(
@@ -61,6 +83,7 @@ async def recommend_outfit(
         matches = []
         for w_img in wardrobe_images:
             w_bytes = await w_img.read()
+            category = classify_image(w_bytes)
             w_features = extract_features(w_bytes)
             if w_features is None:
                 continue
@@ -71,7 +94,8 @@ async def recommend_outfit(
             if similarity >= threshold:
                 matches.append({
                     "wardrobe_image": w_img.filename,
-                    "similarity": float(similarity)
+                    "similarity": float(similarity),
+                    "category": category
                 })
 
         if matches:
