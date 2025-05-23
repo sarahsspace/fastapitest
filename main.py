@@ -20,9 +20,15 @@ app = FastAPI()
 # Load EfficientNet for feature extraction
 model = EfficientNetV2B0(weights="imagenet", include_top=False, pooling="avg")
 
-# Load pretrained Hugging Face transformer model for fashion classification
-hf_model = AutoModelForImageClassification.from_pretrained("nateraw/vit-fashion_mnist")
-hf_extractor = AutoFeatureExtractor.from_pretrained("nateraw/vit-fashion_mnist")
+# Lazy-load Hugging Face transformer model for fashion classification
+hf_model = None
+hf_extractor = None
+
+def load_hf_model():
+    global hf_model, hf_extractor
+    if hf_model is None or hf_extractor is None:
+        hf_model = AutoModelForImageClassification.from_pretrained("nateraw/vit-fashion_mnist")
+        hf_extractor = AutoFeatureExtractor.from_pretrained("nateraw/vit-fashion_mnist")
 
 def extract_features(img_bytes):
     try:
@@ -38,6 +44,7 @@ def extract_features(img_bytes):
 
 def classify_image(img_bytes):
     try:
+        load_hf_model()  # Lazy-load the model only when needed
         pil_img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
         inputs = hf_extractor(images=pil_img, return_tensors="pt")
         with torch.no_grad():
@@ -111,4 +118,4 @@ async def recommend_outfit(
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
