@@ -13,14 +13,19 @@ from typing import List, Annotated
 
 app = FastAPI()
 
-#  Load the trained fashion classifier model
+# Add root route for Render wake-up check
+@app.get("/")
+def root():
+    return {"status": "running"}
+
+# Load the trained fashion classifier model
 fashion_model = load_model("fashion_classifier_model.keras")
 class_labels = ['bottom', 'dress', 'shoes', 'top']
 
-#  Load EfficientNet for feature extraction
+# Load EfficientNet for feature extraction
 feature_model = EfficientNetV2B0(weights="imagenet", include_top=False, pooling="avg")
 
-#  Extract features for similarity comparison
+# Extract features for similarity comparison
 def extract_features(img_bytes):
     img = image.load_img(io.BytesIO(img_bytes), target_size=(224, 224))
     img_array = image.img_to_array(img)
@@ -29,7 +34,7 @@ def extract_features(img_bytes):
     features = feature_model.predict(img_array)
     return features
 
-#  Classify clothing image endpoint
+# Classify clothing image endpoint
 @app.post("/classify_item")
 async def classify_item(image_file: UploadFile = File(...)):
     contents = await image_file.read()
@@ -50,6 +55,8 @@ async def recommend_outfit(
     pinterest_images: List[UploadFile] = File(...),
     wardrobe_images: List[UploadFile] = File(...)
 ):
+    print("/recommend endpoint hit")
+
     threshold = 0.3
     matched_outfits = []
 
@@ -66,6 +73,7 @@ async def recommend_outfit(
 
         matches = []
         for w_img in wardrobe_images:
+            print(f"Classifying {w_img.filename}")
             w_bytes = await w_img.read()
             w_features = extract_features(w_bytes)
             if w_features is None:
@@ -97,7 +105,7 @@ async def recommend_outfit(
         "matched_outfits": matched_outfits
     })
 
-#  Run locally
+# Run locally
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
