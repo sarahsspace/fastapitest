@@ -16,11 +16,10 @@ app = FastAPI()
 def root():
     return {"status": "running"}
 
-#  Load EfficientNet for feature extraction
+# Load EfficientNet for visual style embedding
 feature_model = EfficientNetV2B0(weights="imagenet", include_top=False, pooling="avg")
 
-#  Extract features for similarity comparison
-def extract_features(img_bytes):
+def extract_vector(img_bytes):
     img = image.load_img(io.BytesIO(img_bytes), target_size=(224, 224))
     img_array = image.img_to_array(img)
     img_array = np.expand_dims(img_array, axis=0)
@@ -29,17 +28,38 @@ def extract_features(img_bytes):
     return features
 
 @app.post("/recommend")
-async def recommend_outfit(
+async def recommend_from_pinterest(
     occasion: Annotated[str, Form()],
     pinterest_occasions: Annotated[List[str], Form()],
+    wardrobe_categories: Annotated[List[str], Form()],
     pinterest_images: List[UploadFile] = File(...),
     wardrobe_images: List[UploadFile] = File(...)
 ):
-    print(" /recommend endpoint hit")
+    print("🔁 Received recommend request")
 
     threshold = 0.3
-    matched_outfits = []
+    results = []
 
+    # Precompute wardrobe feature vectors with category
+    wardrobe_items = []
+    for i, w_img in enumerate(wardrobe_images):
+        if i >= len(wardrobe_categories):
+            continue
+
+        category = wardrobe_categories[i].strip().lower()
+        if category not in ["shirt", "pants", "shoes", "dress"]:
+            continue
+
+        w_bytes = await w_img.read()
+        w_vec = extract_vector(w_bytes)
+
+        wardrobe_items.append({
+            "filename": w_img.filename,
+            "vector": w_vec,
+            "category": category
+        })
+
+    # For each Pinterest image with matching occasion
     for i, p_img in enumerate(pinterest_images):
         if i >= len(pinterest_occasions):
             continue
@@ -47,33 +67,52 @@ async def recommend_outfit(
             continue
 
         p_bytes = await p_img.read()
-        p_features = extract_features(p_bytes)
-        if p_features is None:
-            continue
+        p_vec = extract_vector(p_bytes)
 
-        matches = []
-        for w_img in wardrobe_images:
-            w_bytes = await w_img.read()
-            w_features = extract_features(w_bytes)
-            if w_features is None:
+        # Track top match per category
+        top_matches = {
+            "shirt": None,
+            "pants": None,
+            "shoes": None,
+            "dress": None
+        }
+
+        # Compare Pinterest image with each wardrobe item
+        for item in wardrobe_items:
+            sim = cosine_similarity(p_vec, item["vector"])[0][0]
+            if sim < threshold:
                 continue
-            similarity = cosine_similarity(p_features, w_features)[0][0]
 
-            if similarity >= threshold:
-                matches.append({
-                    "wardrobe_image": w_img.filename,
-                    "similarity": float(similarity)
-                })
+            cat = item["category"]
+            if top_matches[cat] is None or sim > top_matches[cat]["similarity"]:
+                top_matches[cat] = {
+                    "filename": item["filename"],
+                    "similarity": float(sim)
+                }
 
-        if matches:
-            matched_outfits.append({
+        # Assemble outfit using rules
+        outfit = None
+        if top_matches["dress"] and top_matches["shoes"]:
+            outfit = {
+                "dress": top_matches["dress"],
+                "shoes": top_matches["shoes"]
+            }
+        elif top_matches["shirt"] and top_matches["pants"] and top_matches["shoes"]:
+            outfit = {
+                "shirt": top_matches["shirt"],
+                "pants": top_matches["pants"],
+                "shoes": top_matches["shoes"]
+            }
+
+        if outfit:
+            results.append({
                 "pinterest_image": p_img.filename,
-                "recommended_wardrobe": sorted(matches, key=lambda x: x["similarity"], reverse=True)[:3]
+                "recommended_outfit": outfit
             })
 
     return JSONResponse(content={
         "occasion": occasion,
-        "matched_outfits": matched_outfits
+        "matched_outfits": results
     })
 
 if __name__ == "__main__":
