@@ -1,10 +1,7 @@
 fastapi
 uvicorn
-numpy
-tensorflow-cpu
-python-multipart
-scikit-learn
-nest_asyncio
 pillow
-transformers
-torch
+numpy
+tflite-runtime
+scikit-learn
+python-multipart
